@@ -1316,6 +1316,11 @@ export default function App() {
         url: url
       });
 
+      // PWAやiOS環境でのFileオブジェクト保存時の参照喪失バグを防ぐため、
+      // ArrayBuffer経由で純粋なBlobデータに変換してからDBへ保存する
+      const arrayBuffer = await f.arrayBuffer();
+      const pureBlob = new Blob([arrayBuffer], { type: f.type });
+
       dbRecords.push({
         id,
         datasetId: targetDatasetId,
@@ -1323,7 +1328,7 @@ export default function App() {
         type: f.type,
         size: f.size,
         lastModified: f.lastModified,
-        data: f
+        data: pureBlob
       });
     }
 
