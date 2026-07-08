@@ -1,0 +1,8 @@
+{
+  "name": "■ SOLID GRAPHIC ART DESIGNER　",
+  "description": "Unlock the next generation of graphic design. This advanced studio converts everyday images into stunning vector graphics and textured mosaic masterpieces. Take full control over tile shapes, alignment, and vector layers to bridge the gap between digital illustration and physical mosaic craftsmanship.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
