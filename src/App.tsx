@@ -1297,52 +1297,23 @@ export default function App() {
 
     if (!targetDatasetId) return;
 
-    // 1. 同期的にUI用データを作成し、即座にUIを更新する
-    const newLoadedImages: LoadedImage[] = [];
-    for (const f of files) {
-      const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
-      const url = URL.createObjectURL(f);
-      newLoadedImages.push({
-        id,
+    setIsReadingDirectory(true);
+    try {
+      // Promise.all内で全て同期的にarrayBuffer()を呼び出し開始することで、
+      // PWA/iOSでのイベントループ後のファイルアクセス権喪失を確実に防ぐ（AI Studio版のロジック）
+      const records = await Promise.all(files.map(async f => ({
+        id: `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
         datasetId: targetDatasetId,
         name: f.name,
         type: f.type,
         size: f.size,
         lastModified: f.lastModified,
-        data: f,
-        url: url
-      });
-    }
-
-    setSelectedImage(newLoadedImages[0]);
-    setImages(prev => {
-      const prevFiltered = prev.filter(p => !newLoadedImages.find(n => n.id === p.id));
-      return [...newLoadedImages, ...prevFiltered];
-    });
-
-    // 2. 裏でDBへ保存（非同期処理はUI更新後に実行する）
-    setIsReadingDirectory(true);
-    try {
-      const dbRecords: ImageRecord[] = [];
-      for (const f of files) {
-        const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
-        // PWAやiOSでのFile参照バグを防ぐためのBlob変換
-        const arrayBuffer = await f.arrayBuffer();
-        const pureBlob = new Blob([arrayBuffer], { type: f.type });
-        
-        dbRecords.push({
-          id,
-          datasetId: targetDatasetId,
-          name: f.name,
-          type: f.type,
-          size: f.size,
-          lastModified: f.lastModified,
-          data: pureBlob
-        });
-      }
-
-      await storeImages(dbRecords);
-      await loadDatasets(); // datasetCountsの更新など
+        data: new Blob([await f.arrayBuffer()], { type: f.type })
+      })));
+      
+      await storeImages(records);
+      await loadDatasets();
+      await loadImagesFromDataset(targetDatasetId);
       setVectorizedImage(null);
     } catch (err) {
       console.error('Error saving uploaded files to DB:', err);
