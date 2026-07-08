@@ -1297,12 +1297,24 @@ export default function App() {
     };
     setSelectedImage(loadedImg);
 
-    if (activeDatasetId) {
+    let targetDatasetId = activeDatasetId;
+    if (!targetDatasetId) {
+      try {
+        const newDs = await createDataset("DEFAULT DATABANK");
+        setActiveDatasetId(newDs.id);
+        setDatasets(prev => [newDs, ...prev]);
+        targetDatasetId = newDs.id;
+      } catch (err) {
+        console.error("Failed to create default dataset", err);
+      }
+    }
+
+    if (targetDatasetId) {
       setIsReadingDirectory(true);
       try {
         const records = files.map(f => ({
-          id: `${activeDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
-          datasetId: activeDatasetId,
+          id: `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
+          datasetId: targetDatasetId,
           name: f.name,
           type: f.type,
           size: f.size,
@@ -1311,7 +1323,7 @@ export default function App() {
         }));
         await storeImages(records);
         await loadDatasets();
-        await loadImagesFromDataset(activeDatasetId);
+        await loadImagesFromDataset(targetDatasetId);
         setVectorizedImage(null);
       } catch (err) {
         console.error('Error saving uploaded files to DB:', err);
