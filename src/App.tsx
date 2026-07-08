@@ -1284,12 +1284,12 @@ export default function App() {
     if (files.length === 0) return;
     
     let targetDatasetId = activeDatasetId;
+    let newlyCreatedDs = null;
+
     if (!targetDatasetId) {
       try {
-        const newDs = await createDataset("DEFAULT DATABANK");
-        setActiveDatasetId(newDs.id);
-        setDatasets(prev => [newDs, ...prev]);
-        targetDatasetId = newDs.id;
+        newlyCreatedDs = await createDataset("DEFAULT DATABANK");
+        targetDatasetId = newlyCreatedDs.id;
       } catch (err) {
         console.error("Failed to create default dataset", err);
       }
@@ -1299,22 +1299,43 @@ export default function App() {
 
     setIsReadingDirectory(true);
     try {
-      // Promise.all内で全て同期的にarrayBuffer()を呼び出し開始することで、
-      // PWA/iOSでのイベントループ後のファイルアクセス権喪失を確実に防ぐ（AI Studio版のロジック）
-      const records = await Promise.all(files.map(async f => ({
-        id: `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
-        datasetId: targetDatasetId,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        lastModified: f.lastModified,
-        data: new Blob([await f.arrayBuffer()], { type: f.type })
-      })));
+      // 全てのFileReaderを同期的に開始して、iOS/Safariでのファイルアクセス権喪失を完全に防ぐ
+      const fileProcessingPromises = Array.from(files).map(f => {
+        return new Promise<ImageRecord>((resolve, reject) => {
+          const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const pureBlob = new Blob([reader.result as ArrayBuffer], { type: f.type });
+            resolve({
+              id,
+              datasetId: targetDatasetId as string,
+              name: f.name,
+              type: f.type,
+              size: f.size,
+              lastModified: f.lastModified,
+              data: pureBlob
+            });
+          };
+          reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+          reader.readAsArrayBuffer(f);
+        });
+      });
+
+      const dbRecords = await Promise.all(fileProcessingPromises);
       
-      await storeImages(records);
+      // DBへ保存
+      await storeImages(dbRecords);
+      
+      // 新規データセットを作成した場合は、DB保存完了後にStateを更新する（useEffectの暴発防止）
+      if (newlyCreatedDs) {
+        setActiveDatasetId(newlyCreatedDs.id);
+        setDatasets(prev => [newlyCreatedDs, ...prev]);
+      }
+
       await loadDatasets();
       await loadImagesFromDataset(targetDatasetId);
       setVectorizedImage(null);
+
     } catch (err) {
       console.error('Error saving uploaded files to DB:', err);
     } finally {
