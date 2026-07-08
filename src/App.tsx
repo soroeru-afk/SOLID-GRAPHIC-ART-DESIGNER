@@ -1274,29 +1274,88 @@ export default function App() {
 
   // Dataset Actions
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !activeDatasetId) return;
+    if (!e.target.files || e.target.files.length === 0) return;
     const files: File[] = [];
     for (let i = 0; i < e.target.files.length; i++) {
         const file = e.target.files.item(i);
-        if (file && file.type.startsWith('image/')) files.push(file);
+        // iOSでMIMEタイプが空になるバグ対策のため拡張子でも判定
+        if (file && (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/i) || file.type === '')) {
+            files.push(file);
+        }
     }
     
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      alert("選択されたファイルが画像として認識されませんでした。");
+      return;
+    }
+    
+    // データセットの暗黙的生成（UIにはないが内部的に必要）
+    let targetDatasetId = activeDatasetId;
+    let newlyCreatedDs = null;
+
+    if (!targetDatasetId) {
+      try {
+        newlyCreatedDs = await createDataset("DEFAULT DATABANK");
+        targetDatasetId = newlyCreatedDs.id;
+      } catch (err: any) {
+        alert("データセットの生成に失敗しました: " + err.message);
+        console.error("Failed to create default dataset", err);
+      }
+    }
+
+    if (!targetDatasetId) return;
+
     setIsReadingDirectory(true);
     try {
-      const records = await Promise.all(files.map(async f => ({
-        id: `${activeDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
-        datasetId: activeDatasetId,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        lastModified: f.lastModified,
-        data: new Blob([await f.arrayBuffer()], { type: f.type })
-      })));
-      await storeImages(records);
+      // 1. 即座にUIを更新してユーザーに安心感を与える
+      const newLoadedImages: LoadedImage[] = [];
+      for (const f of files) {
+        const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
+        newLoadedImages.push({
+          id, datasetId: targetDatasetId, name: f.name, type: f.type || 'image/jpeg', size: f.size, lastModified: f.lastModified, data: f, url: URL.createObjectURL(f)
+        });
+      }
+      setSelectedImage(newLoadedImages[0]);
+      setImages(prev => {
+        const prevFiltered = prev.filter(p => !newLoadedImages.find(n => n.id === p.id));
+        return [...newLoadedImages, ...prevFiltered];
+      });
+
+      // 2. 裏でFileReaderを使ってOSの参照喪失を防ぎつつBlob変換する
+      const fileProcessingPromises = Array.from(files).map(f => {
+        return new Promise<ImageRecord>((resolve, reject) => {
+          const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const pureBlob = new Blob([reader.result as ArrayBuffer], { type: f.type || 'image/jpeg' });
+            resolve({
+              id, datasetId: targetDatasetId as string, name: f.name, type: f.type || 'image/jpeg', size: f.size, lastModified: f.lastModified, data: pureBlob
+            });
+          };
+          reader.onerror = () => reject(reader.error || new Error('FileReader failed for ' + f.name));
+          reader.readAsArrayBuffer(f);
+        });
+      });
+
+      const dbRecords = await Promise.all(fileProcessingPromises);
+      
+      // DBへ保存
+      await storeImages(dbRecords);
+      
+      // 保存完了後にStateを更新する（useEffectの暴発防止）
+      if (newlyCreatedDs) {
+        setActiveDatasetId(newlyCreatedDs.id);
+        setDatasets(prev => [newlyCreatedDs, ...prev]);
+      }
+
       await loadDatasets();
-      await loadImagesFromDataset(activeDatasetId);
+      // 再読み込みはしない（既に即時更新済みのため、画面のチラつきやrevokeによる画像消滅を防ぐ）
+      
       setVectorizedImage(null);
+
+    } catch (err: any) {
+      alert("画像の読み込み・保存中にエラーが発生しました:\n" + err.message);
+      console.error('Error saving uploaded files to DB:', err);
     } finally {
       setIsReadingDirectory(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
