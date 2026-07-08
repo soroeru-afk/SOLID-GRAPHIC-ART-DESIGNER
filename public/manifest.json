@@ -1,0 +1,22 @@
+{
+  "name": "SOLID GRAPHIC ART DESIGNER",
+  "short_name": "GraphicArt",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0E1014",
+  "theme_color": "#0E1014",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
