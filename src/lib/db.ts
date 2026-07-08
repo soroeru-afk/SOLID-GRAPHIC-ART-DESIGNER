@@ -30,23 +30,25 @@ interface ImageViewerDB extends DBSchema {
 }
 
 const DB_NAME = 'solid-image-viewer-db';
-const DB_VERSION = 2; // upgrade to version 2
+const DB_VERSION = 5; // Bumped to 5 to avoid VersionError if user has v3 or v4
 const STORE_NAME_IMAGES = 'images';
 const STORE_NAME_DATASETS = 'datasets';
 
 export async function initDB() {
   return openDB<ImageViewerDB>(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, newVersion, transaction) {
-      if (oldVersion < 1) {
-        // Initial creation
+      // Bulletproof upgrade logic: check if stores exist before creating
+      if (!db.objectStoreNames.contains(STORE_NAME_DATASETS)) {
         db.createObjectStore(STORE_NAME_DATASETS, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(STORE_NAME_IMAGES)) {
         const imgStore = db.createObjectStore(STORE_NAME_IMAGES, { keyPath: 'id' });
         imgStore.createIndex('by-dataset', 'datasetId');
-      } else if (oldVersion < 2) {
-        // Upgrade from version 1 to 2
-        db.createObjectStore(STORE_NAME_DATASETS, { keyPath: 'id' });
+      } else {
         const imgStore = transaction.objectStore(STORE_NAME_IMAGES);
-        imgStore.createIndex('by-dataset', 'datasetId');
+        if (!imgStore.indexNames.contains('by-dataset')) {
+          imgStore.createIndex('by-dataset', 'datasetId');
+        }
       }
     },
   });
