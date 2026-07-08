@@ -1283,20 +1283,6 @@ export default function App() {
     
     if (files.length === 0) return;
     
-    const firstFile = files[0];
-    const url = URL.createObjectURL(firstFile);
-    const loadedImg: LoadedImage = {
-      id: `local-${firstFile.name}-${Date.now()}`,
-      datasetId: 'local',
-      name: firstFile.name,
-      type: firstFile.type,
-      size: firstFile.size,
-      lastModified: firstFile.lastModified,
-      data: firstFile,
-      url: url
-    };
-    setSelectedImage(loadedImg);
-
     let targetDatasetId = activeDatasetId;
     if (!targetDatasetId) {
       try {
@@ -1309,28 +1295,58 @@ export default function App() {
       }
     }
 
-    if (targetDatasetId) {
-      setIsReadingDirectory(true);
-      try {
-        const records = files.map(f => ({
-          id: `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
-          datasetId: targetDatasetId,
-          name: f.name,
-          type: f.type,
-          size: f.size,
-          lastModified: f.lastModified,
-          data: f
-        }));
-        await storeImages(records);
-        await loadDatasets();
-        await loadImagesFromDataset(targetDatasetId);
-        setVectorizedImage(null);
-      } catch (err) {
-        console.error('Error saving uploaded files to DB:', err);
-      } finally {
-        setIsReadingDirectory(false);
-      }
+    if (!targetDatasetId) return;
+
+    // 即座にUIへ反映するための処理
+    const newLoadedImages: LoadedImage[] = [];
+    const dbRecords: ImageRecord[] = [];
+
+    for (const f of files) {
+      const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
+      const url = URL.createObjectURL(f);
+      
+      newLoadedImages.push({
+        id,
+        datasetId: targetDatasetId,
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        lastModified: f.lastModified,
+        data: f,
+        url: url
+      });
+
+      dbRecords.push({
+        id,
+        datasetId: targetDatasetId,
+        name: f.name,
+        type: f.type,
+        size: f.size,
+        lastModified: f.lastModified,
+        data: f
+      });
     }
+
+    // まずUI（canvasおよびサイドバー）に即時反映させる
+    setSelectedImage(newLoadedImages[0]);
+    setImages(prev => {
+      // 既に同じIDの画像がある場合は除外して追加
+      const prevFiltered = prev.filter(p => !newLoadedImages.find(n => n.id === p.id));
+      return [...newLoadedImages, ...prevFiltered];
+    });
+
+    // 裏でDBに保存する
+    setIsReadingDirectory(true);
+    try {
+      await storeImages(dbRecords);
+      await loadDatasets(); // datasetCountsの更新など
+      setVectorizedImage(null);
+    } catch (err) {
+      console.error('Error saving uploaded files to DB:', err);
+    } finally {
+      setIsReadingDirectory(false);
+    }
+    
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
