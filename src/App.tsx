@@ -1297,14 +1297,11 @@ export default function App() {
 
     if (!targetDatasetId) return;
 
-    // 即座にUIへ反映するための処理
+    // 1. 同期的にUI用データを作成し、即座にUIを更新する
     const newLoadedImages: LoadedImage[] = [];
-    const dbRecords: ImageRecord[] = [];
-
     for (const f of files) {
       const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
       const url = URL.createObjectURL(f);
-      
       newLoadedImages.push({
         id,
         datasetId: targetDatasetId,
@@ -1315,34 +1312,35 @@ export default function App() {
         data: f,
         url: url
       });
-
-      // PWAやiOS環境でのFileオブジェクト保存時の参照喪失バグを防ぐため、
-      // ArrayBuffer経由で純粋なBlobデータに変換してからDBへ保存する
-      const arrayBuffer = await f.arrayBuffer();
-      const pureBlob = new Blob([arrayBuffer], { type: f.type });
-
-      dbRecords.push({
-        id,
-        datasetId: targetDatasetId,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        lastModified: f.lastModified,
-        data: pureBlob
-      });
     }
 
-    // まずUI（canvasおよびサイドバー）に即時反映させる
     setSelectedImage(newLoadedImages[0]);
     setImages(prev => {
-      // 既に同じIDの画像がある場合は除外して追加
       const prevFiltered = prev.filter(p => !newLoadedImages.find(n => n.id === p.id));
       return [...newLoadedImages, ...prevFiltered];
     });
 
-    // 裏でDBに保存する
+    // 2. 裏でDBへ保存（非同期処理はUI更新後に実行する）
     setIsReadingDirectory(true);
     try {
+      const dbRecords: ImageRecord[] = [];
+      for (const f of files) {
+        const id = `${targetDatasetId}-${f.name}-${f.lastModified}-${f.size}`;
+        // PWAやiOSでのFile参照バグを防ぐためのBlob変換
+        const arrayBuffer = await f.arrayBuffer();
+        const pureBlob = new Blob([arrayBuffer], { type: f.type });
+        
+        dbRecords.push({
+          id,
+          datasetId: targetDatasetId,
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          lastModified: f.lastModified,
+          data: pureBlob
+        });
+      }
+
       await storeImages(dbRecords);
       await loadDatasets(); // datasetCountsの更新など
       setVectorizedImage(null);
