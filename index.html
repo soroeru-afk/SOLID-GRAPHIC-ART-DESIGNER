@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" href="/pwa-192x192.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/png" href="./pwa-192x192.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <title>SOLID GRAPHIC ART DESIGNER</title>
   </head>
   <body>
@@ -16,7 +16,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then((registration) => {
+          navigator.serviceWorker.register('./sw.js').then((registration) => {
             console.log('SW registered: ', registration);
           }).catch((registrationError) => {
             console.log('SW registration failed: ', registrationError);
