@@ -223,16 +223,7 @@ export default function App() {
   // Persistence Key
   const SETTINGS_KEY = 'SOLID_TILE_ART_SETTINGS_V2';
 
-  // Save settings to localStorage
-  useEffect(() => {
-    const settings = {
-      shapeConfigs, activeShape,
-      theme, mortarBrightness,
-      vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast,
-      language
-    };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [shapeConfigs, activeShape, theme, mortarBrightness, vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast, language]);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -240,7 +231,20 @@ export default function App() {
     if (saved) {
       applySettings(saved);
     }
+    setIsSettingsLoaded(true);
   }, []);
+
+  // Save settings to localStorage
+  useEffect(() => {
+    if (!isSettingsLoaded) return;
+    const settings = {
+      shapeConfigs, activeShape,
+      theme, mortarBrightness,
+      vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast,
+      language
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [shapeConfigs, activeShape, theme, mortarBrightness, vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast, language, isSettingsLoaded]);
 
   const applySettings = (jsonString: string) => {
     try {
@@ -1270,7 +1274,7 @@ export default function App() {
 
   // Dataset Actions
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !activeDatasetId) return;
+    if (!e.target.files || e.target.files.length === 0) return;
     const files: File[] = [];
     for (let i = 0; i < e.target.files.length; i++) {
         const file = e.target.files.item(i);
@@ -1278,25 +1282,44 @@ export default function App() {
     }
     
     if (files.length === 0) return;
-    setIsReadingDirectory(true);
-    try {
-      const records = files.map(f => ({
-        id: `${activeDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
-        datasetId: activeDatasetId,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        lastModified: f.lastModified,
-        data: f
-      }));
-      await storeImages(records);
-      await loadDatasets();
-      await loadImagesFromDataset(activeDatasetId);
-      setVectorizedImage(null);
-    } finally {
-      setIsReadingDirectory(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    
+    const firstFile = files[0];
+    const url = URL.createObjectURL(firstFile);
+    const loadedImg: LoadedImage = {
+      id: `local-${firstFile.name}-${Date.now()}`,
+      datasetId: 'local',
+      name: firstFile.name,
+      type: firstFile.type,
+      size: firstFile.size,
+      lastModified: firstFile.lastModified,
+      data: firstFile,
+      url: url
+    };
+    setSelectedImage(loadedImg);
+
+    if (activeDatasetId) {
+      setIsReadingDirectory(true);
+      try {
+        const records = files.map(f => ({
+          id: `${activeDatasetId}-${f.name}-${f.lastModified}-${f.size}`,
+          datasetId: activeDatasetId,
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          lastModified: f.lastModified,
+          data: f
+        }));
+        await storeImages(records);
+        await loadDatasets();
+        await loadImagesFromDataset(activeDatasetId);
+        setVectorizedImage(null);
+      } catch (err) {
+        console.error('Error saving uploaded files to DB:', err);
+      } finally {
+        setIsReadingDirectory(false);
+      }
     }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const confirmClearAll = async () => {
