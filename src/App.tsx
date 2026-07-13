@@ -107,6 +107,7 @@ export default function App() {
   const [datasetCounts, setDatasetCounts] = useState<Record<string, number>>({});
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
   const [images, setImages] = useState<LoadedImage[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   
   // New Design Parameters scoped by TileShape AND FormationMode
   const [activeShape, setActiveShape] = useState<TileShape>('SQUARE');
@@ -186,6 +187,16 @@ export default function App() {
 
   // App State
   const [selectedImage, setSelectedImage] = useState<LoadedImage | null>(null);
+  const [lastSelectedImageId, setLastSelectedImageId] = useState<string | null>(() => {
+    return localStorage.getItem('SOLID_TILE_ART_LAST_IMAGE');
+  });
+
+  useEffect(() => {
+    if (selectedImage?.id) {
+      localStorage.setItem('SOLID_TILE_ART_LAST_IMAGE', selectedImage.id);
+      setLastSelectedImageId(selectedImage.id);
+    }
+  }, [selectedImage]);
   const [vectorizedImage, setVectorizedImage] = useState<string | null>(null);
   const [stockedImages, setStockedImages] = useState<LoadedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -246,7 +257,7 @@ export default function App() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [shapeConfigs, activeShape, theme, mortarBrightness, vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast, language, isSettingsLoaded]);
 
-  const applySettings = (jsonString: string) => {
+  const applySettings = async (jsonString: string) => {
     try {
       const s = JSON.parse(jsonString);
       if (s.shapeConfigs) {
@@ -267,17 +278,104 @@ export default function App() {
       if (s.vectorContrast !== undefined) setVectorContrast(s.vectorContrast);
       if (s.vectorPresets) setVectorPresets(s.vectorPresets);
       if (s.language) setLanguage(s.language);
+
+      // Restore image if integrated
+      if (s.imageData && s.imageData.base64) {
+        try {
+          setIsReadingDirectory(true);
+          const response = await fetch(s.imageData.base64);
+          const blob = await response.blob();
+          
+          let targetDatasetId = activeDatasetId;
+          let newlyCreatedDs = null;
+          if (!targetDatasetId) {
+            newlyCreatedDs = await createDataset("DEFAULT DATABANK");
+            targetDatasetId = newlyCreatedDs.id;
+          }
+
+          const id = `${targetDatasetId}-${s.imageData.name}-${s.imageData.lastModified}-${s.imageData.size}`;
+          
+          const newLoadedImage: LoadedImage = {
+            id,
+            datasetId: targetDatasetId,
+            name: s.imageData.name,
+            type: s.imageData.type || 'image/jpeg',
+            size: s.imageData.size,
+            lastModified: s.imageData.lastModified || Date.now(),
+            data: blob,
+            url: URL.createObjectURL(blob)
+          };
+
+          // UI Update
+          setSelectedImage(newLoadedImage);
+          setImages(prev => {
+            const prevFiltered = prev.filter(p => p.id !== id);
+            return [newLoadedImage, ...prevFiltered];
+          });
+
+          // DB Save
+          const dbRecord: ImageRecord = {
+            id,
+            datasetId: targetDatasetId,
+            name: s.imageData.name,
+            type: s.imageData.type || 'image/jpeg',
+            size: s.imageData.size,
+            lastModified: s.imageData.lastModified || Date.now(),
+            data: blob
+          };
+          await storeImages([dbRecord]);
+
+          if (newlyCreatedDs) {
+            setActiveDatasetId(newlyCreatedDs.id);
+            setDatasets(prev => [newlyCreatedDs, ...prev]);
+          }
+        } catch (imgErr) {
+          console.error("Failed to restore image from settings:", imgErr);
+        } finally {
+          setIsReadingDirectory(false);
+        }
+      }
     } catch (e) {
       console.error("Failed to parse settings:", e);
     }
   };
 
-  const exportSettings = () => {
+  const exportSettings = async () => {
+    let imageData = null;
+
+    if (selectedImage) {
+      try {
+        let base64 = "";
+        if (selectedImage.url.startsWith('data:')) {
+          base64 = selectedImage.url;
+        } else {
+          const response = await fetch(selectedImage.url);
+          const blob = await response.blob();
+          base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
+        imageData = {
+          name: selectedImage.name,
+          type: selectedImage.type,
+          size: selectedImage.size,
+          lastModified: selectedImage.lastModified,
+          base64
+        };
+      } catch (e) {
+        console.error("Failed to serialize selected image for export:", e);
+      }
+    }
+
     const settings = {
         shapeConfigs, activeShape,
         theme, mortarBrightness,
         vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast,
-        vectorPresets, language
+        vectorPresets, language,
+        imageData
     };
     const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -292,9 +390,9 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       if (event.target?.result) {
-        applySettings(event.target.result as string);
+        await applySettings(event.target.result as string);
       }
     };
     reader.readAsText(file);
@@ -323,9 +421,6 @@ export default function App() {
       loadImagesFromDataset(activeDatasetId);
     } else {
       setImages([]);
-      if (!selectedImage && !isLoading) {
-        fetchRandomImage();
-      }
     }
   }, [activeDatasetId]);
 
@@ -372,7 +467,10 @@ export default function App() {
       setImages(loaded);
       
       if (loaded.length > 0 && !selectedImage) {
-        setSelectedImage(loaded[0]);
+        const lastImg = lastSelectedImageId ? loaded.find(img => img.id === lastSelectedImageId) : null;
+        if (lastImg) {
+          setSelectedImage(lastImg);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -619,7 +717,7 @@ export default function App() {
     }
   };
 
-  const [zoom, setZoom] = useState<number>(1);
+  const [zoom, setZoom] = useState<number>(0.8);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -1273,11 +1371,11 @@ export default function App() {
   };
 
   // Dataset Actions
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const processFileList = async (fileList: FileList | File[]) => {
     const files: File[] = [];
-    for (let i = 0; i < e.target.files.length; i++) {
-        const file = e.target.files.item(i);
+    const length = fileList.length;
+    for (let i = 0; i < length; i++) {
+        const file = 'item' in fileList ? (fileList as FileList).item(i) : (fileList as File[])[i];
         // iOSでMIMEタイプが空になるバグ対策のため拡張子でも判定
         if (file && (file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/i) || file.type === '')) {
             files.push(file);
@@ -1359,6 +1457,29 @@ export default function App() {
     } finally {
       setIsReadingDirectory(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    await processFileList(e.target.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processFileList(e.dataTransfer.files);
     }
   };
 
@@ -2087,7 +2208,26 @@ export default function App() {
         {/* Right Sidebar: IMAGE SOURCES */}
         <aside className={cn("flex flex-col gap-4 shrink-0 overflow-visible relative transition-[width] duration-300 ease-in-out z-40", isRightSidebarOpen ? "w-[280px]" : "w-0")}>
           <div className={cn("flex flex-col gap-4 w-[280px] h-full transition-opacity duration-300 overflow-hidden", isRightSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>
-          <Panel title={t("IMAGE DATABANKS", "画像データバンク")} className="h-full flex flex-col overflow-hidden" contentClassName="flex flex-col p-4 overflow-hidden gap-4 h-full">
+          <Panel 
+            title={t("IMAGE DATABANKS", "画像データバンク")} 
+            className="h-full flex flex-col overflow-hidden relative" 
+            contentClassName="flex flex-col p-4 overflow-hidden gap-4 h-full relative"
+          >
+            {isDragging && (
+              <div 
+                className="absolute inset-0 bg-accent/20 border-2 border-dashed border-accent z-50 flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] transition-all"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <FolderOpen className="text-accent animate-bounce" size={32} />
+                <span className="text-[10px] font-mono text-accent uppercase tracking-wider">DROP IMAGES TO UPLOAD</span>
+              </div>
+            )}
+            <div 
+              className="h-full flex flex-col overflow-hidden gap-4"
+              onDragOver={handleDragOver}
+            >
             
             <div className="flex gap-2 shrink-0">
               <SolidButton 
@@ -2209,6 +2349,7 @@ export default function App() {
               <ImageIcon size={32} className="opacity-20" />
               <span>DRAIN STATUS: EMPTY</span>
             </div>}
+          </div>
           </div>
         </Panel>
         </div>
