@@ -220,6 +220,56 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<'ENGINE' | 'ASSETS'>('ENGINE');
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(300);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(280);
+  const [isLeftResizing, setIsLeftResizing] = useState(false);
+  const [isRightResizing, setIsRightResizing] = useState(false);
+
+  const startLeftResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsLeftResizing(true);
+    const startX = e.clientX;
+    const startWidth = leftSidebarWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      let newWidth = startWidth + delta;
+      newWidth = Math.max(300, Math.min(newWidth, 550));
+      setLeftSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsLeftResizing(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const startRightResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsRightResizing(true);
+    const startX = e.clientX;
+    const startWidth = rightSidebarWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = startX - moveEvent.clientX;
+      let newWidth = startWidth + delta;
+      newWidth = Math.max(280, Math.min(newWidth, 500));
+      setRightSidebarWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      setIsRightResizing(false);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
 
   // Persistence Key
   const SETTINGS_KEY = 'SOLID_TILE_ART_SETTINGS_V2';
@@ -242,10 +292,17 @@ export default function App() {
       shapeConfigs, activeShape,
       theme, mortarBrightness,
       vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast,
-      language
+      language,
+      isLeftSidebarOpen, isRightSidebarOpen,
+      leftSidebarWidth, rightSidebarWidth
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  }, [shapeConfigs, activeShape, theme, mortarBrightness, vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast, language, isSettingsLoaded]);
+  }, [
+    shapeConfigs, activeShape, theme, mortarBrightness, 
+    vectorSteps, vectorSmoothing, vectorColorPrecision, vectorSaturation, vectorContrast, 
+    language, isSettingsLoaded,
+    isLeftSidebarOpen, isRightSidebarOpen, leftSidebarWidth, rightSidebarWidth
+  ]);
 
   const applySettings = async (jsonString: string) => {
     try {
@@ -325,6 +382,10 @@ export default function App() {
           setIsReadingDirectory(false);
         }
       }
+      if (s.isLeftSidebarOpen !== undefined) setIsLeftSidebarOpen(s.isLeftSidebarOpen);
+      if (s.isRightSidebarOpen !== undefined) setIsRightSidebarOpen(s.isRightSidebarOpen);
+      if (s.leftSidebarWidth !== undefined) setLeftSidebarWidth(s.leftSidebarWidth);
+      if (s.rightSidebarWidth !== undefined) setRightSidebarWidth(s.rightSidebarWidth);
     } catch (e) {
       console.error("Failed to parse settings:", e);
     }
@@ -1596,8 +1657,14 @@ export default function App() {
       <div className="flex flex-1 gap-4 min-h-0">
         
         {/* Left Sidebar */}
-        <aside className={cn("flex flex-col gap-4 shrink-0 overflow-visible relative transition-[width] duration-300 ease-in-out z-40", isLeftSidebarOpen ? "w-[300px]" : "w-0")}>
-          <div className={cn("flex flex-col gap-4 w-[300px] h-full transition-opacity duration-300 overflow-hidden", isLeftSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>
+        <aside 
+          className={cn("flex flex-col gap-4 shrink-0 overflow-visible relative ease-in-out z-40", !isLeftResizing && "transition-[width] duration-300")}
+          style={{ width: isLeftSidebarOpen ? leftSidebarWidth : 0 }}
+        >
+          <div 
+            className={cn("flex flex-col gap-4 h-full transition-opacity duration-300 overflow-hidden", isLeftSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none")}
+            style={{ width: leftSidebarWidth }}
+          >
           {/* Sidebar Tabs - Fixed at top with toggles */}
           <div className="flex flex-col gap-2 shrink-0 pr-3">
             <div className="flex gap-1 bg-panel-bg p-1 border border-panel-border shrink-0 shadow-md">
@@ -1694,7 +1761,7 @@ export default function App() {
           </div>
 
           <div 
-            className="flex-1 flex flex-col gap-4 overflow-y-scroll overflow-x-hidden pr-1 pb-4" 
+            className="flex-1 flex flex-col gap-4 overflow-y-auto overflow-x-hidden pr-1 pb-4" 
           >
             {sidebarTab === 'ENGINE' ? (
               <>
@@ -2076,6 +2143,15 @@ export default function App() {
               <ChevronLeft size={12} strokeWidth={3} className={cn("shrink-0 transition-transform duration-300", !isLeftSidebarOpen && "rotate-180")} />
             </div>
           </div>
+          {/* Left Sidebar Resize Handle */}
+          {isLeftSidebarOpen && (
+            <div 
+              className="group absolute right-0 top-0 w-2 -mr-1 h-full cursor-col-resize z-50 flex justify-center bg-transparent transition-colors"
+              onMouseDown={startLeftResize}
+            >
+              <div className="w-[2px] h-full bg-transparent group-hover:bg-accent transition-colors" />
+            </div>
+          )}
         </aside>
 
         {/* Main Viewport: DATA BANKS */}
@@ -2196,8 +2272,14 @@ export default function App() {
         </Panel>
 
         {/* Right Sidebar: IMAGE SOURCES */}
-        <aside className={cn("flex flex-col gap-4 shrink-0 overflow-visible relative transition-[width] duration-300 ease-in-out z-40", isRightSidebarOpen ? "w-[280px]" : "w-0")}>
-          <div className={cn("flex flex-col gap-4 w-[280px] h-full transition-opacity duration-300 overflow-hidden", isRightSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>
+        <aside 
+          className={cn("flex flex-col gap-4 shrink-0 overflow-visible relative ease-in-out z-40", !isRightResizing && "transition-[width] duration-300")}
+          style={{ width: isRightSidebarOpen ? rightSidebarWidth : 0 }}
+        >
+          <div 
+            className={cn("flex flex-col gap-4 h-full transition-opacity duration-300 overflow-hidden", isRightSidebarOpen ? "opacity-100" : "opacity-0 pointer-events-none")}
+            style={{ width: rightSidebarWidth }}
+          >
           <Panel 
             title={t("IMAGE DATABANKS", "画像データバンク")} 
             className="h-full flex flex-col overflow-hidden relative" 
@@ -2274,7 +2356,7 @@ export default function App() {
                     <span>{t('STOCKED GENERATIONS', 'ストックされた画像')}</span>
                   </div>
                 </div>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide py-1 px-1">
+                <div className="flex gap-2 overflow-x-auto py-1 px-1">
                   {stockedImages.map((sImg) => (
                     <div 
                       key={sImg.id}
@@ -2300,7 +2382,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-1 border-t border-panel-border pt-4 mt-2">
+            <div className="flex-1 overflow-y-auto flex flex-col gap-1 border-t border-panel-border pt-4 mt-2">
               <div className="flex justify-between items-center px-1 mb-2">
                 <div className="text-[9px] font-mono text-text-muted uppercase tracking-widest">LOCAL ASSETS</div>
                 {images.length > 0 && (
@@ -2350,6 +2432,15 @@ export default function App() {
             <ChevronRight size={12} strokeWidth={3} className={cn("shrink-0 transition-transform duration-300", !isRightSidebarOpen && "rotate-180")} />
           </div>
         </div>
+        {/* Right Sidebar Resize Handle */}
+        {isRightSidebarOpen && (
+          <div 
+            className="group absolute left-0 top-0 w-2 -ml-1 h-full cursor-col-resize z-50 flex justify-center bg-transparent transition-colors"
+            onMouseDown={startRightResize}
+          >
+            <div className="w-[2px] h-full bg-transparent group-hover:bg-accent transition-colors" />
+          </div>
+        )}
       </aside>
 
       </div>
