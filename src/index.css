@@ -58,32 +58,62 @@
     --btn-active-text: #ffffff;
   }
 
-  :root[data-theme="PAPER"] {
-    --bg-app: #f5f5f0;
-    --bg-panel: #ffffff;
-    --bg-panel-header: #fafaf8;
-    --border-panel: #e5e5dc;
-    --border-inner: #d5d5cc;
-    --text-main: #2c2c2a;
-    --text-sub: #7a7a73;
-    --text-dim: #a3a39b;
-    --accent: #d94f26;
-    --accent-glow: rgba(217, 79, 38, 0.3);
+  :root[data-theme="PAPER"],
+  :root[data-theme="PEPER"] {
+    --bg-app: #F2EFE6;
+    --bg-panel: #FFFFFF;
+    --bg-panel-header: #EBE4D5;
+    --border-panel: #D8D1C2;
+    --border-inner: #CDC5B4;
+    --text-main: #241D17;
+    --text-sub: #73634F;
+    --text-dim: #8F806F;
+    --accent: #D95430;
+    --accent-glow: rgba(217, 84, 48, 0.35);
 
-    --btn-bg: #ffffff;
-    --btn-border: #e5e5dc;
-    --btn-border-b: #c5c5bb;
-    --btn-border-r: #d5d5cc;
-    --btn-text: #7a7a73;
-    --btn-hover-bg: #fafaf8;
-    --btn-hover-text: #2c2c2a;
-    --btn-hover-border-t: #ffffff;
+    --btn-bg: #EBE4D5;
+    --btn-border: #D2C9B8;
+    --btn-border-b: #B5AB99;
+    --btn-border-r: #C4BAA8;
+    --btn-text: #73634F;
+    --btn-hover-bg: #F5EFE4;
+    --btn-hover-text: #241D17;
+    --btn-hover-border-t: #FFFFFF;
 
-    --btn-active-bg: #d94f26;
-    --btn-active-border: #ef7855;
-    --btn-active-border-b: #a53617;
-    --btn-active-border-r: #bf401c;
-    --btn-active-text: #ffffff;
+    --btn-active-bg: #D95430;
+    --btn-active-border: #E86B48;
+    --btn-active-border-b: #B03A1B;
+    --btn-active-border-r: #C34422;
+    --btn-active-text: #FFFFFF;
+  }
+
+  :root[data-theme="NAVY"],
+  :root[data-theme="MONO"] {
+    --bg-app: #06090e;
+    --bg-panel: #0b111a;
+    --bg-panel-header: #0c121a;
+    --border-panel: #233348;
+    --border-inner: #1a273b;
+    --text-main: #a2c5ee;
+    --text-sub: #4a6382;
+    --text-dim: #2f445e;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.5);
+
+    --btn-bg: #182333;
+    --btn-border: #293d5a;
+    --btn-border-b: #0b1018;
+    --btn-border-r: #101722;
+    --btn-text: #869ab3;
+    --btn-hover-bg: #1d2a3d;
+    --btn-hover-text: #ffffff;
+    --btn-hover-border-t: #354f73;
+
+    --btn-active-bg: #abc0e0;
+    --btn-active-border: #d8e4f5;
+    --btn-active-border-b: #6a7c9b;
+    --btn-active-border-r: #889abb;
+    --btn-active-text: #090d14;
   }
 
   :root[data-theme="BLACK"] {
