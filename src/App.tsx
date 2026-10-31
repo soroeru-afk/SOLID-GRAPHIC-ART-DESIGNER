@@ -53,6 +53,14 @@ export const THEME_OPTIONS: ThemeOption[] = [
   { id: 'RED', label: 'RED', dotColor: '#a3382f' },
 ];
 
+export const THEME_HEADER_COLORS: Record<Theme, string> = {
+  PEPER: '#EBE4D5',
+  LIGHT: '#f1f5f9',
+  NAVY: '#0c121a',
+  BLACK: '#121214',
+  RED: '#170808',
+};
+
 interface LoadedImage extends ImageRecord {
   url: string;
 }
@@ -509,9 +517,19 @@ export default function App() {
   // Modals
   const [showClearAllModal, setShowClearAllModal] = useState(false);
 
-  // Apply Theme
+  // Apply Theme & Dynamic Meta Theme-Color Sync for Browser/PWA Header
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', normalizedTheme);
+
+    // Dynamic meta theme-color sync for browser header/titlebar (matching tool header color)
+    const themeColorHex = THEME_HEADER_COLORS[normalizedTheme] || '#EBE4D5';
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement('meta');
+      metaTheme.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.setAttribute('content', themeColorHex);
   }, [normalizedTheme]);
 
   // Load from DB on mount
@@ -1675,10 +1693,10 @@ export default function App() {
       
       {/* Top Header */}
       <header className={cn(
-        "flex justify-between items-center shrink-0 border-b transition-colors",
+        "flex justify-between items-center shrink-0 border-b transition-colors -mx-4 -mt-4 px-4 h-12 mb-0",
         normalizedTheme === 'PEPER'
-          ? "bg-[#EBE4D5] border-[#D8D1C2] -mx-4 -mt-4 px-4 h-12 mb-0"
-          : "border-panel-border h-10 pb-4"
+          ? "bg-[#EBE4D5] border-[#D8D1C2]"
+          : "bg-panel-header border-panel-border"
       )}>
         <div className="flex items-center gap-2.5">
           <div className={cn(
